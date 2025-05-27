@@ -2,6 +2,14 @@
 
 A basic ESP32-C6 project using ESP-IDF v5.4.1 that demonstrates basic functionality with WiFi 6, Bluetooth 5, and IEEE802.15.4 capabilities.
 
+## New to IoT Development?
+Start here: [GETTING_STARTED.md](GETTING_STARTED.md) - A beginner-friendly guide
+
+## Documentation Structure
+- [GETTING_STARTED.md](GETTING_STARTED.md) - Beginner guide (start here!)
+- [README.md](README.md) - This file (project overview and setup)
+- [ADVANCED.md](ADVANCED.md) - Advanced configuration and assumptions
+
 ## Hardware
 
 - **Chip**: ESP32-C6FH4 (QFN32) revision v0.1
