@@ -4,8 +4,27 @@
         {
             "label": "Build",
             "type": "shell",
-            "command": "idf.py",
-            "args": ["build"],
+            "windows": {
+                "command": "powershell",
+                "args": [
+                    "-Command",
+                    "& '${config:idf.espIdfPath}\\export.ps1'; idf.py build"
+                ]
+            },
+            "linux": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py build"
+                ]
+            },
+            "osx": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py build"
+                ]
+            },
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -21,8 +40,27 @@
         {
             "label": "Flash",
             "type": "shell",
-            "command": "idf.py",
-            "args": ["-p", "COM13", "flash"],
+            "windows": {
+                "command": "powershell",
+                "args": [
+                    "-Command",
+                    "& '${config:idf.espIdfPath}\\export.ps1'; idf.py -p ${config:idf.portWin} flash"
+                ]
+            },
+            "linux": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py -p ${config:idf.port} flash"
+                ]
+            },
+            "osx": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py -p ${config:idf.port} flash"
+                ]
+            },
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -35,8 +73,27 @@
         {
             "label": "Monitor",
             "type": "shell",
-            "command": "idf.py",
-            "args": ["-p", "COM13", "monitor"],
+            "windows": {
+                "command": "powershell",
+                "args": [
+                    "-Command",
+                    "& '${config:idf.espIdfPath}\\export.ps1'; idf.py -p ${config:idf.portWin} monitor"
+                ]
+            },
+            "linux": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py -p ${config:idf.port} monitor"
+                ]
+            },
+            "osx": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py -p ${config:idf.port} monitor"
+                ]
+            },
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -49,8 +106,27 @@
         {
             "label": "Build Flash Monitor",
             "type": "shell",
-            "command": "idf.py",
-            "args": ["-p", "COM13", "build", "flash", "monitor"],
+            "windows": {
+                "command": "powershell",
+                "args": [
+                    "-Command",
+                    "& '${config:idf.espIdfPath}\\export.ps1'; idf.py -p ${config:idf.portWin} build flash monitor"
+                ]
+            },
+            "linux": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py -p ${config:idf.port} build flash monitor"
+                ]
+            },
+            "osx": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py -p ${config:idf.port} build flash monitor"
+                ]
+            },
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -63,8 +139,27 @@
         {
             "label": "Clean",
             "type": "shell",
-            "command": "idf.py",
-            "args": ["fullclean"],
+            "windows": {
+                "command": "powershell",
+                "args": [
+                    "-Command",
+                    "& '${config:idf.espIdfPath}\\export.ps1'; idf.py fullclean"
+                ]
+            },
+            "linux": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py fullclean"
+                ]
+            },
+            "osx": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py fullclean"
+                ]
+            },
             "group": "build",
             "presentation": {
                 "echo": true,
@@ -77,8 +172,27 @@
         {
             "label": "Size",
             "type": "shell",
-            "command": "idf.py",
-            "args": ["size"],
+            "windows": {
+                "command": "powershell",
+                "args": [
+                    "-Command",
+                    "& '${config:idf.espIdfPath}\\export.ps1'; idf.py size"
+                ]
+            },
+            "linux": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py size"
+                ]
+            },
+            "osx": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "source ${config:idf.espIdfPath}/export.sh && idf.py size"
+                ]
+            },
             "group": "build",
             "presentation": {
                 "echo": true,

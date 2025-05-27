@@ -1,5 +1,6 @@
 {
     "idf.portWin": "COM13",
+    "idf.port": "/dev/ttyUSB0",
     "idf.adapterTargetName": "esp32c6",
     "idf.espIdfPath": "C:\\Espressif\\frameworks\\esp-idf-v5.4.1",
     "idf.pythonBinPath": "C:\\Users\\draval\\.espressif\\python_env\\idf5.4_py3.11_env\\Scripts\\python.exe",

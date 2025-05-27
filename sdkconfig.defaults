@@ -1,10 +1,11 @@
-# ESP32-C6 Project Configuration
+# Waveshare ESP32-C6-LCD-1.47 Board Configuration
 #
-# This file contains essential project settings.
+# This file contains essential project settings for the
+# Waveshare ESP32-C6-LCD-1.47 development board.
 # The full sdkconfig is auto-generated from this file.
 #
 # For beginners: You can ignore this file initially.
-# For advanced users: See ADVANCED.md for detailed explanations.
+# For advanced users: See README.md for board-specific details.
 
 # Target Configuration
 CONFIG_IDF_TARGET="esp32c6"
@@ -19,5 +20,15 @@ CONFIG_BOOTLOADER_LOG_LEVEL=3
 # Compiler settings
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 
-# Additional configurations can be added here as needed
-# See ADVANCED.md for examples and explanations
+# Memory Configuration (optimized for 4MB flash)
+CONFIG_PARTITION_TABLE_SINGLE_APP=y
+
+# Log Configuration
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_DEFAULT_LEVEL=3
+
+# Additional configurations can be added as needed:
+# - SPI settings (for LCD and TF card)
+# - WiFi settings (when needed)
+# - Bluetooth settings (when needed)
+# - LVGL settings (for advanced graphics)
