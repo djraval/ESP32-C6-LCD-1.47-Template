@@ -1,0 +1,27 @@
+# ESP32-C6 Project Default Configuration
+# This file contains only the essential project-specific settings
+# The full sdkconfig will be generated from this file
+
+# Target Configuration
+CONFIG_IDF_TARGET="esp32c6"
+
+# Serial flasher config
+CONFIG_ESPTOOLPY_PORT="COM13"
+CONFIG_ESPTOOLPY_BAUD_115200B=y
+CONFIG_ESPTOOLPY_BAUD=115200
+CONFIG_ESPTOOLPY_COMPRESSED=y
+CONFIG_ESPTOOLPY_MONITOR_BAUD_CONSOLE=y
+CONFIG_ESPTOOLPY_MONITOR_BAUD=115200
+
+# Application manager
+CONFIG_APP_COMPILE_TIME_DATE=y
+
+# Bootloader config
+CONFIG_BOOTLOADER_LOG_LEVEL_INFO=y
+CONFIG_BOOTLOADER_LOG_LEVEL=3
+
+# Compiler options
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# Component config
+# Add your specific component configurations here as needed

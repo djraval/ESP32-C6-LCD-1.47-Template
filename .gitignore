@@ -1,5 +1,6 @@
 # ESP-IDF Build System
 build/
+sdkconfig
 sdkconfig.old
 .config.old
 
