@@ -9,6 +9,44 @@ A basic ESP32-C6 project using ESP-IDF v5.4.1 that demonstrates basic functional
 - **Crystal**: 40MHz
 - **Flash**: 2MB
 - **MAC Address**: 9c:9e:6e:7b:3f:34
+- **Serial Port**: COM13 (Windows) - configured as default
+
+## Setup Assumptions & Decisions
+
+This project was configured with the following assumptions and decisions. Update as needed for your environment:
+
+### **Development Environment**
+- **OS**: Windows (PowerShell)
+- **IDE**: VS Code with ESP-IDF extension
+- **ESP-IDF**: v5.4.1 (installed via Windows installer)
+- **Installation Path**: `C:\Espressif\frameworks\esp-idf-v5.4.1`
+- **Python**: 3.11.2 (from ESP-IDF environment)
+
+### **Serial Communication**
+- **Default Port**: COM13 (set in VS Code settings)
+- **Flash Baud Rate**: 460800 (VS Code default)
+- **Monitor Baud Rate**: 115200 (standard)
+- **No port cycling**: Direct connection to COM13
+
+### **Build Configuration**
+- **Optimization**: Size over speed (typical embedded approach)
+- **Logging**: INFO level for development (good balance)
+- **Bootloader**: INFO level logging enabled
+- **Compiler**: GCC with C11/C++17 standards
+- **Build Type**: Standard application (not RAM-only)
+
+### **Project Structure Decisions**
+- **Source Control**: Git with comprehensive .gitignore
+- **Configuration**: `sdkconfig.defaults` for team settings, `sdkconfig` ignored
+- **VS Code**: Integrated tasks for build/flash/monitor
+- **Documentation**: Inline comments explaining all assumptions
+
+### **Security & Features**
+- **Security**: None enabled initially (add for production)
+- **WiFi**: Not configured (add when needed)
+- **Bluetooth**: Not configured (add when needed)
+- **OTA**: Not configured (add when needed)
+- **Encryption**: Not enabled (add for production)
 
 ## Features
 
@@ -91,6 +129,36 @@ The project is configured for:
 - **Serial Port**: COM13 (Windows) - adjust as needed
 - **Baud Rate**: 115200
 - **Target**: ESP32-C6
+
+### **Modifying Setup Assumptions**
+
+If your environment differs from the assumptions above, here's how to adapt:
+
+#### **Different Serial Port**
+1. **VS Code**: Edit `.vscode/settings.json` → change `"idf.portWin": "COM13"`
+2. **Command Line**: Use `idf.py -p YOUR_PORT flash monitor`
+3. **Linux/macOS**: Change to `"idf.port": "/dev/ttyUSB0"` in settings
+
+#### **Different ESP-IDF Version**
+1. Update `.vscode/settings.json` paths to match your ESP-IDF installation
+2. Check `sdkconfig.defaults` for version-specific configurations
+3. Run `idf.py reconfigure` after ESP-IDF updates
+
+#### **Different Optimization/Logging**
+1. Edit `sdkconfig.defaults` file
+2. Run `idf.py reconfigure` to apply changes
+3. Or use `idf.py menuconfig` for interactive configuration
+
+#### **Adding WiFi/Bluetooth**
+1. Uncomment relevant sections in `sdkconfig.defaults`
+2. Add initialization code in `main/main.c`
+3. Update `main/CMakeLists.txt` if adding new components
+
+#### **Production Deployment**
+1. Enable security features in `sdkconfig.defaults`
+2. Change optimization to performance if needed
+3. Disable debug logging for production builds
+4. Consider OTA update mechanisms
 
 ## Development
 

@@ -1,25 +1,76 @@
 # ESP32-C6 Project Default Configuration
+# ===========================================
 # This file contains only the essential project-specific settings
-# The full sdkconfig will be generated from this file
+# The full sdkconfig will be generated from this file + ESP-IDF defaults
+#
+# SETUP ASSUMPTIONS & DECISIONS:
+# - Using ESP32-C6FH4 (QFN32) revision v0.1 with 2MB flash
+# - Development on Windows with VS Code + ESP-IDF extension
+# - Serial port COM13 (configured in VS Code settings, not here)
+# - Standard 115200 baud rate for monitor/flash operations
+# - Size optimization preferred over speed (typical for embedded)
+# - Basic logging enabled for development/debugging
+# - No WiFi/Bluetooth specific configs yet (add as needed)
+# - No security features enabled initially (add for production)
+#
+# USAGE:
+# - Edit this file to change project-wide settings
+# - Run 'idf.py reconfigure' after changes
+# - Individual developers can override locally via 'idf.py menuconfig'
+# - Local overrides won't be committed (sdkconfig is in .gitignore)
 
 # Target Configuration
 CONFIG_IDF_TARGET="esp32c6"
 
-# Serial flasher config (Note: Port is typically set via command line or VS Code)
-# CONFIG_ESPTOOLPY_BAUD_115200B=y
-# CONFIG_ESPTOOLPY_BAUD=115200
-# CONFIG_ESPTOOLPY_COMPRESSED=y
+# Serial flasher config
+# Note: Port (COM13) is set via VS Code settings.json: "idf.portWin": "COM13"
+# Note: Baud rates are handled by ESP-IDF defaults and VS Code extension
+# Uncomment and modify these if you need non-standard settings:
+# CONFIG_ESPTOOLPY_BAUD_460800B=y
 # CONFIG_ESPTOOLPY_MONITOR_BAUD=115200
 
 # Application manager
 CONFIG_APP_COMPILE_TIME_DATE=y
+# Includes build timestamp in firmware (useful for version tracking)
 
 # Bootloader config
 CONFIG_BOOTLOADER_LOG_LEVEL_INFO=y
 CONFIG_BOOTLOADER_LOG_LEVEL=3
+# INFO level logging during boot (good balance of info vs. speed)
 
 # Compiler options
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+# Optimize for size rather than speed (typical for embedded projects)
+# Change to CONFIG_COMPILER_OPTIMIZATION_PERF=y if speed is critical
 
-# Component config
-# Add your specific component configurations here as needed
+# Logging Configuration
+# Default ESP_LOG_INFO level is usually sufficient for development
+# Uncomment to change global log level:
+# CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y
+# CONFIG_LOG_DEFAULT_LEVEL=4
+
+# FreeRTOS Configuration
+# Using ESP-IDF defaults, but common overrides:
+# CONFIG_FREERTOS_HZ=1000  # Tick rate (default 100Hz, 1000Hz for better precision)
+# CONFIG_FREERTOS_TASK_FUNCTION_WRAPPER=y  # Better stack overflow detection
+
+# Memory Configuration
+# Using defaults, but for reference:
+# CONFIG_ESP_MAIN_TASK_STACK_SIZE=3584  # Main task stack size
+# CONFIG_ESP_MINIMAL_SHARED_STACK_SIZE=2048  # Shared stack size
+
+# WiFi Configuration (add when needed)
+# CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM=10
+# CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM=32
+# CONFIG_ESP32_WIFI_STATIC_TX_BUFFER_NUM=16
+
+# Bluetooth Configuration (add when needed)
+# CONFIG_BT_ENABLED=y
+# CONFIG_BT_NIMBLE_ENABLED=y
+
+# Component-specific configurations
+# Add your specific component configurations here as the project grows
+# Examples:
+# CONFIG_LWIP_MAX_SOCKETS=16  # If using many network connections
+# CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y  # For HTTPS/TLS
+# CONFIG_FATFS_LONG_FILENAMES=y  # For SD card file operations
