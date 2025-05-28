@@ -18,8 +18,8 @@
  * - TF card slot for external storage
  *
  * To extend this application:
- * 1. Add text rendering to LCD (requires font library)
- * 2. Add RGB LED: Include "rgb_led.h" and configure RMT
+ * 1. ✅ Text rendering implemented with full font support
+ * 2. ⚠️ RGB LED: Hardware exists on GPIO8 but driver needs completion
  * 3. Add WiFi/Bluetooth connectivity
  * 4. See examples/board_demo/ for advanced features
  */
@@ -189,8 +189,8 @@ void app_main(void)
 
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "Hardware initialized! Features available:");
-    ESP_LOGI(TAG, "✓ LCD Display: %s", lcd_ready ? "Ready" : "Failed");
-    ESP_LOGI(TAG, "- RGB LED: Include rgb_led.h to enable");
+    ESP_LOGI(TAG, "✅ LCD Display: %s", lcd_ready ? "Ready" : "Failed");
+    ESP_LOGI(TAG, "⚠️ RGB LED: Hardware exists but driver needs completion");
     ESP_LOGI(TAG, "- WiFi/Bluetooth: Configure in sdkconfig.defaults");
     ESP_LOGI(TAG, "- Advanced features: See examples/board_demo/");
     ESP_LOGI(TAG, "");
