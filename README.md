@@ -17,7 +17,7 @@ Ready-to-use ESP32-C6 project template for the **Waveshare ESP32-C6-LCD-1.47** b
 
 ### Hardware Drivers
 - **LCD Display**: ✅ Complete ST7789 driver with text rendering (`components/lcd_st7789/`)
-- **RGB LED**: ⚠️ Placeholder implementation - hardware exists but driver needs completion (`components/rgb_led/`)
+- **RGB LED**: ✅ Complete WS2812 RMT driver with RGB/HSV support (`components/rgb_led/`)
 - **Pin Mapping**: ✅ Complete GPIO definitions (`main/board_pins.h`)
 
 ### Ready-to-Use Examples
@@ -211,9 +211,9 @@ uint16_t custom_color = lcd_rgb_to_565(128, 64, 192);  // Purple
 - **Safe Area Offset**: X+6, Y+8 pixels from top-left
 - Use `lcd_draw_safe_*` functions for best visual results
 
-### RGB LED Driver (`rgb_led`) - ⚠️ PLACEHOLDER
+### RGB LED Driver (`rgb_led`) - ✅ WORKING
 
-**Note: This is currently a placeholder implementation. The hardware RGB LED exists on GPIO8 but the driver only logs messages and doesn't control the actual LED.**
+Complete WS2812 RMT driver for the onboard RGB LED on GPIO8.
 
 #### Basic Setup
 ```c

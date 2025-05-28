@@ -60,11 +60,32 @@ esp_err_t rgb_led_set_hsv(uint16_t hue, uint8_t saturation, uint8_t value);
 esp_err_t rgb_led_off(void);
 
 /**
+ * @brief Deinitialize the RGB LED
+ *
+ * @return esp_err_t ESP_OK on success
+ */
+esp_err_t rgb_led_deinit(void);
+
+/**
  * @brief Get default RGB LED configuration for the board
- * 
+ *
  * @return rgb_led_config_t Default configuration
  */
 rgb_led_config_t rgb_led_get_default_config(void);
+
+/**
+ * @brief Test RGB LED with a simple pattern
+ *
+ * @return esp_err_t ESP_OK on success
+ */
+esp_err_t rgb_led_test(void);
+
+/**
+ * @brief Test GPIO pin by toggling it (for debugging)
+ *
+ * @return esp_err_t ESP_OK on success
+ */
+esp_err_t rgb_led_gpio_test(void);
 
 // Predefined colors
 #define RGB_LED_COLOR_RED       255, 0, 0

@@ -19,7 +19,7 @@
  *
  * To extend this application:
  * 1. ✅ Text rendering implemented with full font support
- * 2. ⚠️ RGB LED: Hardware exists on GPIO8 but driver needs completion
+ * 2. ✅ RGB LED implemented with WS2812 RMT driver
  * 3. Add WiFi/Bluetooth connectivity
  * 4. See examples/board_demo/ for advanced features
  */
@@ -33,12 +33,14 @@
 #include "esp_flash.h"
 #include "esp_timer.h"
 #include "lcd_st7789.h"
+#include "rgb_led.h"
 #include "board_pins.h"
 
 static const char *TAG = "ESP32C6_HELLO";
 
-// Global LCD state
+// Global hardware state
 static bool lcd_ready = false;
+static bool rgb_led_ready = false;
 
 /**
  * @brief Display basic system information
@@ -119,12 +121,35 @@ static void init_lcd(void)
 }
 
 /**
+ * @brief Initialize RGB LED
+ */
+static void init_rgb_led(void)
+{
+    ESP_LOGI(TAG, "Initializing RGB LED...");
+
+    rgb_led_config_t rgb_config = rgb_led_get_default_config();
+
+    if (rgb_led_init(&rgb_config) == ESP_OK) {
+        ESP_LOGI(TAG, "RGB LED initialized successfully");
+
+        // Run comprehensive test sequence
+        rgb_led_test();
+
+        rgb_led_ready = true;
+        ESP_LOGI(TAG, "RGB LED ready for use");
+    } else {
+        ESP_LOGE(TAG, "Failed to initialize RGB LED");
+        rgb_led_ready = false;
+    }
+}
+
+/**
  * @brief Visual feedback task using LCD screen
  */
 static void hello_task(void *pvParameters)
 {
     int counter = 0;
-    uint16_t colors[] = {
+    uint16_t lcd_colors[] = {
         LCD_COLOR_RED,
         LCD_COLOR_GREEN,
         LCD_COLOR_BLUE,
@@ -133,38 +158,68 @@ static void hello_task(void *pvParameters)
         LCD_COLOR_CYAN,
         LCD_COLOR_WHITE
     };
-    int color_count = sizeof(colors) / sizeof(colors[0]);
+
+    // RGB LED colors (R, G, B values)
+    struct {
+        uint8_t r, g, b;
+    } rgb_colors[] = {
+        {255, 0, 0},    // Red
+        {0, 255, 0},    // Green
+        {0, 0, 255},    // Blue
+        {255, 255, 0},  // Yellow
+        {255, 0, 255},  // Magenta
+        {0, 255, 255},  // Cyan
+        {255, 255, 255} // White
+    };
+
+    int color_count = sizeof(lcd_colors) / sizeof(lcd_colors[0]);
 
     while (1) {
         ESP_LOGI(TAG, "Hello World! Counter: %d", counter);
         ESP_LOGI(TAG, "Free heap: %ld bytes", esp_get_free_heap_size());
 
-        // Visual feedback on LCD screen
-        if (lcd_ready) {
-            uint16_t current_color = colors[counter % color_count];
+        // Visual feedback on LCD screen and RGB LED
+        if (lcd_ready || rgb_led_ready) {
+            int color_index = counter % color_count;
+            uint16_t current_lcd_color = lcd_colors[color_index];
 
-            // Fill safe area with color (avoiding curved bezel)
-            lcd_fill_screen(LCD_COLOR_BLACK);
-            lcd_fill_safe_area(current_color);
-
-            // Draw text on colored background with different sizes
-            // Alternate between different font sizes based on counter
-            if (counter % 3 == 0) {
-                // Small text with wrapping
-                lcd_printf_safe(5, 5, LCD_COLOR_BLACK, current_color, 1,
-                               "Count: %d\nSmall Font\nHeap: %ld",
-                               counter, esp_get_free_heap_size());
-            } else if (counter % 3 == 1) {
-                // Medium text (2x scale)
-                lcd_printf_safe(5, 5, LCD_COLOR_BLACK, current_color, 2,
-                               "Count: %d\nMedium", counter);
-            } else {
-                // Large text (3x scale)
-                lcd_printf_safe(5, 5, LCD_COLOR_BLACK, current_color, 3,
-                               "Count: %d\nBig!", counter);
+            // Set RGB LED color
+            if (rgb_led_ready) {
+                rgb_led_set_color(rgb_colors[color_index].r,
+                                 rgb_colors[color_index].g,
+                                 rgb_colors[color_index].b);
+                ESP_LOGI(TAG, "RGB LED: Set to color %d (R=%d, G=%d, B=%d)",
+                        color_index, rgb_colors[color_index].r,
+                        rgb_colors[color_index].g, rgb_colors[color_index].b);
             }
 
-            ESP_LOGI(TAG, "LCD: Safe area updated with color 0x%04X", current_color);
+            // Update LCD display
+            if (lcd_ready) {
+                // Fill safe area with color (avoiding curved bezel)
+                lcd_fill_screen(LCD_COLOR_BLACK);
+                lcd_fill_safe_area(current_lcd_color);
+
+                // Draw text on colored background with different sizes
+                // Alternate between different font sizes based on counter
+                if (counter % 3 == 0) {
+                    // Small text with wrapping
+                    lcd_printf_safe(5, 5, LCD_COLOR_BLACK, current_lcd_color, 1,
+                                   "Count: %d\nSmall Font\nHeap: %ld\nRGB: %s",
+                                   counter, esp_get_free_heap_size(),
+                                   rgb_led_ready ? "ON" : "OFF");
+                } else if (counter % 3 == 1) {
+                    // Medium text (2x scale)
+                    lcd_printf_safe(5, 5, LCD_COLOR_BLACK, current_lcd_color, 2,
+                                   "Count: %d\nMedium\nRGB: %s", counter,
+                                   rgb_led_ready ? "ON" : "OFF");
+                } else {
+                    // Large text (3x scale)
+                    lcd_printf_safe(5, 5, LCD_COLOR_BLACK, current_lcd_color, 3,
+                                   "Count: %d\nBig!", counter);
+                }
+
+                ESP_LOGI(TAG, "LCD: Safe area updated with color 0x%04X", current_lcd_color);
+            }
         }
 
         counter++;
@@ -187,10 +242,13 @@ void app_main(void)
     // Initialize LCD display
     init_lcd();
 
+    // Initialize RGB LED
+    init_rgb_led();
+
     ESP_LOGI(TAG, "");
     ESP_LOGI(TAG, "Hardware initialized! Features available:");
     ESP_LOGI(TAG, "✅ LCD Display: %s", lcd_ready ? "Ready" : "Failed");
-    ESP_LOGI(TAG, "⚠️ RGB LED: Hardware exists but driver needs completion");
+    ESP_LOGI(TAG, "✅ RGB LED: %s", rgb_led_ready ? "Ready" : "Failed");
     ESP_LOGI(TAG, "- WiFi/Bluetooth: Configure in sdkconfig.defaults");
     ESP_LOGI(TAG, "- Advanced features: See examples/board_demo/");
     ESP_LOGI(TAG, "");
@@ -198,10 +256,16 @@ void app_main(void)
     // Create and start the hello task
     xTaskCreate(hello_task, "hello_task", 4096, NULL, 5, NULL);
 
-    if (lcd_ready) {
-        ESP_LOGI(TAG, "Visual feedback started! Watch the LCD screen cycle through colors every 5 seconds!");
+    if (lcd_ready || rgb_led_ready) {
+        ESP_LOGI(TAG, "Visual feedback started!");
+        if (lcd_ready) {
+            ESP_LOGI(TAG, "- LCD screen will cycle through colors every 5 seconds");
+        }
+        if (rgb_led_ready) {
+            ESP_LOGI(TAG, "- RGB LED will sync with LCD colors");
+        }
         ESP_LOGI(TAG, "Console logs will continue for debugging.");
     } else {
-        ESP_LOGI(TAG, "LCD failed to initialize. Check console logs for debugging.");
+        ESP_LOGI(TAG, "Hardware initialization failed. Check console logs for debugging.");
     }
 }
