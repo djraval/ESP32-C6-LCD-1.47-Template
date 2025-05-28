@@ -23,7 +23,7 @@ extern "C" {
 // LCD Display (ST7789) - SPI Interface
 // =============================================================================
 #define LCD_SPI_HOST        SPI2_HOST
-#define LCD_SPI_FREQ_HZ     (40 * 1000 * 1000)  // 40MHz
+#define LCD_SPI_FREQ_HZ     (80 * 1000 * 1000)  // 80MHz (maximum speed for ESP32-C6)
 
 #define LCD_PIN_MOSI        6   // SPI MOSI (shared with SD card)
 #define LCD_PIN_SCLK        7   // SPI SCLK (shared with SD card)
@@ -36,6 +36,20 @@ extern "C" {
 #define LCD_WIDTH           172
 #define LCD_HEIGHT          320
 #define LCD_ROTATION        0   // 0=portrait, 1=landscape
+
+// Bezel compensation for curved edges (safe area)
+#define LCD_BEZEL_TOP       8   // Pixels to avoid at top edge
+#define LCD_BEZEL_BOTTOM    8   // Pixels to avoid at bottom edge
+#define LCD_BEZEL_LEFT      6   // Pixels to avoid at left edge
+#define LCD_BEZEL_RIGHT     6   // Pixels to avoid at right edge
+
+// Safe area dimensions (content area within bezel)
+#define LCD_SAFE_WIDTH      (LCD_WIDTH - LCD_BEZEL_LEFT - LCD_BEZEL_RIGHT)   // 160 pixels
+#define LCD_SAFE_HEIGHT     (LCD_HEIGHT - LCD_BEZEL_TOP - LCD_BEZEL_BOTTOM)  // 304 pixels
+#define LCD_SAFE_X_START    LCD_BEZEL_LEFT    // 6
+#define LCD_SAFE_Y_START    LCD_BEZEL_TOP     // 8
+#define LCD_SAFE_X_END      (LCD_WIDTH - LCD_BEZEL_RIGHT - 1)   // 165
+#define LCD_SAFE_Y_END      (LCD_HEIGHT - LCD_BEZEL_BOTTOM - 1) // 311
 
 // =============================================================================
 // RGB LED (WS2812-style)
