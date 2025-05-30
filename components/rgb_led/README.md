@@ -1,12 +1,6 @@
-# RGB LED Driver - ✅ WORKING IMPLEMENTATION
+# RGB LED Driver
 
-Complete WS2812-style RGB LED driver for the Waveshare ESP32-C6-LCD-1.47 board using ESP-IDF's RMT peripheral.
-
-## Current Status
-
-**✅ Hardware**: RGB LED on GPIO8 (verified and working)
-**✅ Driver Status**: Full RMT-based WS2812 implementation
-**✅ Features**: RGB/HSV color control, predefined colors, hardware-accelerated timing
+Custom WS2812 RMT driver for learning low-level LED protocols.
 
 ## Features
 

@@ -1,6 +1,6 @@
 # LCD ST7789 Driver
 
-Complete driver for the ST7789 LCD controller used in the Waveshare ESP32-C6-LCD-1.47 board.
+Custom ST7789 SPI driver for learning low-level display protocols.
 
 ## Features
 

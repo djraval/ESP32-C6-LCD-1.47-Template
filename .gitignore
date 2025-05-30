@@ -6,13 +6,10 @@ sdkconfig.old
 
 # Dependencies
 dependencies.lock
+managed_components/
 
 # VS Code
 .vscode/
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
 
 # IDE files
 .idea/

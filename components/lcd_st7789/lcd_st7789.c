@@ -13,7 +13,21 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include "../../../main/board_pins.h"
+// Pin definitions for ESP32-C6-LCD-1.47
+#define LCD_PIN_MOSI    6
+#define LCD_PIN_SCLK    7
+#define LCD_PIN_CS      14
+#define LCD_PIN_DC      15
+#define LCD_PIN_RST     21
+#define LCD_PIN_BL      22
+#define LCD_SPI_HOST    SPI2_HOST
+#define LCD_SPI_FREQ_HZ 80000000  // 80MHz
+
+// Safe area definitions (avoiding curved bezel)
+#define LCD_SAFE_X_START 6
+#define LCD_SAFE_Y_START 8
+#define LCD_SAFE_WIDTH   160
+#define LCD_SAFE_HEIGHT  304
 
 // Simple 8x8 bitmap font (ASCII 32-126)
 // Each character is 8 bytes, each byte represents a row

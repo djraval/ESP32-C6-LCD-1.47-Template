@@ -1,271 +1,175 @@
 /*
- * ESP32-C6 Hello World with LCD Display
+ * ESP32-C6 Template for Waveshare ESP32-C6-LCD-1.47
  *
- * Simple hello world application for the Waveshare ESP32-C6-LCD-1.47 board.
- * Demonstrates LCD usage with bezel compensation for curved display edges.
+ * Minimal LVGL implementation with custom drivers available for reference.
+ * Uses ESP-IDF built-in LCD panel API + LVGL for professional UI.
  *
- * Features:
- * - System information display in console
- * - Visual feedback on 1.47" LCD display
- * - Safe area rendering avoiding curved bezel edges
- * - Text rendering with 8x8 bitmap font
- * - Color cycling every 5 seconds with dynamic text
- *
- * Board: Waveshare ESP32-C6-LCD-1.47
- * - ESP32-C6FH4 (QFN32) with 4MB flash
- * - 1.47" LCD display (ST7789, 172x320) with bezel compensation
- * - RGB LED (WS2812-style)
- * - TF card slot for external storage
- *
- * To extend this application:
- * 1. ✅ Text rendering implemented with full font support
- * 2. ✅ RGB LED implemented with WS2812 RMT driver
- * 3. Add WiFi/Bluetooth connectivity
- * 4. See examples/board_demo/ for advanced features
+ * Board: Waveshare ESP32-C6-LCD-1.47 (ST7789 172x320, WS2812 RGB LED)
+ * Custom drivers: components/lcd_st7789/ and components/rgb_led/ (for learning)
  */
 
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_system.h"
-#include "esp_log.h"
-#include "esp_chip_info.h"
-#include "esp_flash.h"
 #include "esp_timer.h"
-#include "lcd_st7789.h"
-#include "rgb_led.h"
-#include "board_pins.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_panel_vendor.h"
+#include "esp_lcd_panel_ops.h"
+#include "driver/gpio.h"
+#include "driver/spi_master.h"
+#include "driver/ledc.h"
+#include "esp_log.h"
+#include "lvgl.h"
 
-static const char *TAG = "ESP32C6_HELLO";
 
-// Global hardware state
-static bool lcd_ready = false;
-static bool rgb_led_ready = false;
+static const char *TAG = "ESP32C6";
 
-/**
- * @brief Display basic system information
- */
-static void print_system_info(void)
+
+// Pin definitions
+#define LCD_HOST        SPI2_HOST
+#define PIN_SCLK        7
+#define PIN_MOSI        6
+#define PIN_LCD_DC      15
+#define PIN_LCD_RST     21
+#define PIN_LCD_CS      14
+#define PIN_BK_LIGHT    22
+
+// Display specs for ESP32-C6-LCD-1.47
+#define LCD_H_RES       172
+#define LCD_V_RES       320
+
+static esp_lcd_panel_handle_t panel_handle = NULL;
+static lv_disp_draw_buf_t disp_buf;
+static lv_color_t buf1[LCD_H_RES * 40];  // Increased buffer size for better performance
+static lv_color_t buf2[LCD_H_RES * 40];  // Add second buffer for double buffering
+static lv_disp_drv_t disp_drv;
+
+static void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
 {
-    esp_chip_info_t chip_info;
-    uint32_t flash_size;
+    esp_lcd_panel_handle_t panel = (esp_lcd_panel_handle_t) drv->user_data;
+    int offsetx1 = area->x1;
+    int offsety1 = area->y1;
+    int offsetx2 = area->x2;
+    int offsety2 = area->y2;
 
-    esp_chip_info(&chip_info);
-    esp_flash_get_size(NULL, &flash_size);
+    // Draw the bitmap to the LCD panel
+    esp_lcd_panel_draw_bitmap(panel, offsetx1, offsety1, offsetx2 + 1, offsety2 + 1, color_map);
 
-    ESP_LOGI(TAG, "=== Waveshare ESP32-C6-LCD-1.47 ===");
-    ESP_LOGI(TAG, "ESP32-C6 chip with %d CPU core(s), WiFi%s%s",
-             chip_info.cores,
-             (chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
-             (chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
-    ESP_LOGI(TAG, "Silicon revision: %d", chip_info.revision);
-    ESP_LOGI(TAG, "Flash size: %ld MB", flash_size / (1024 * 1024));
-    ESP_LOGI(TAG, "Free heap: %ld bytes", esp_get_free_heap_size());
+    // Signal LVGL that flushing is done
+    lv_disp_flush_ready(drv);
 }
 
-/**
- * @brief Initialize LCD display
- */
-static void init_lcd(void)
+static void increase_lvgl_tick(void *arg)
 {
-    ESP_LOGI(TAG, "Initializing LCD display...");
-
-    lcd_config_t lcd_config = lcd_get_default_config();
-
-    if (lcd_init(&lcd_config) == ESP_OK) {
-        ESP_LOGI(TAG, "LCD initialized successfully");
-
-        // Set backlight to 75%
-        lcd_set_backlight(75);
-
-        // Clear screen and demonstrate text rendering
-        lcd_fill_screen(LCD_COLOR_BLACK);
-
-        // Draw text demonstration with smart layout
-        uint16_t current_y = 0;
-        lcd_text_bounds_t bounds;
-
-        // Title
-        lcd_draw_safe_string(0, current_y, "ESP32-C6 Text Demo", LCD_COLOR_WHITE, LCD_COLOR_BLACK);
-        current_y += 15; // Fixed spacing for single line
-
-        // Demonstrate text wrapping with bounds calculation
-        lcd_draw_safe_text_wrapped_ex(0, current_y, "This is a long line that will automatically wrap to the next line when it reaches the edge of the safe area!",
-                                     LCD_COLOR_YELLOW, LCD_COLOR_BLACK, 1, &bounds);
-        ESP_LOGI(TAG, "Wrapped text: %d lines, %dx%d pixels", bounds.lines, bounds.width, bounds.height);
-        current_y += bounds.height + 5; // Add 5 pixels spacing
-
-        // Demonstrate explicit line breaks with bounds
-        lcd_draw_safe_text_wrapped_ex(0, current_y, "Line 1\nLine 2\nLine 3", LCD_COLOR_GREEN, LCD_COLOR_BLACK, 1, &bounds);
-        ESP_LOGI(TAG, "Multi-line text: %d lines, %dx%d pixels", bounds.lines, bounds.width, bounds.height);
-        current_y += bounds.height + 5; // Add 5 pixels spacing
-
-        // Demonstrate printf-style formatting with bounds
-        lcd_printf_safe_ex(0, current_y, LCD_COLOR_CYAN, LCD_COLOR_BLACK, 1, &bounds,
-                          "Heap: %ld bytes\nTime: %d ms\nY-pos: %d",
-                          esp_get_free_heap_size(), (int)(esp_timer_get_time() / 1000), current_y);
-        ESP_LOGI(TAG, "Printf text: %d lines, %dx%d pixels", bounds.lines, bounds.width, bounds.height);
-
-        ESP_LOGI(TAG, "Text rendering demo: multiple sizes and cases");
-        ESP_LOGI(TAG, "Safe area: %dx%d pixels, avoiding curved bezel edges",
-                 LCD_SAFE_WIDTH, LCD_SAFE_HEIGHT);
-
-        vTaskDelay(pdMS_TO_TICKS(4000));
-
-        lcd_ready = true;
-        ESP_LOGI(TAG, "LCD ready for display");
-    } else {
-        ESP_LOGE(TAG, "Failed to initialize LCD");
-        lcd_ready = false;
-    }
-}
-
-/**
- * @brief Initialize RGB LED
- */
-static void init_rgb_led(void)
-{
-    ESP_LOGI(TAG, "Initializing RGB LED...");
-
-    rgb_led_config_t rgb_config = rgb_led_get_default_config();
-
-    if (rgb_led_init(&rgb_config) == ESP_OK) {
-        ESP_LOGI(TAG, "RGB LED initialized successfully");
-
-        // Run comprehensive test sequence
-        rgb_led_test();
-
-        rgb_led_ready = true;
-        ESP_LOGI(TAG, "RGB LED ready for use");
-    } else {
-        ESP_LOGE(TAG, "Failed to initialize RGB LED");
-        rgb_led_ready = false;
-    }
-}
-
-/**
- * @brief Visual feedback task using LCD screen
- */
-static void hello_task(void *pvParameters)
-{
-    int counter = 0;
-    uint16_t lcd_colors[] = {
-        LCD_COLOR_RED,
-        LCD_COLOR_GREEN,
-        LCD_COLOR_BLUE,
-        LCD_COLOR_YELLOW,
-        LCD_COLOR_MAGENTA,
-        LCD_COLOR_CYAN,
-        LCD_COLOR_WHITE
-    };
-
-    // RGB LED colors (R, G, B values)
-    struct {
-        uint8_t r, g, b;
-    } rgb_colors[] = {
-        {255, 0, 0},    // Red
-        {0, 255, 0},    // Green
-        {0, 0, 255},    // Blue
-        {255, 255, 0},  // Yellow
-        {255, 0, 255},  // Magenta
-        {0, 255, 255},  // Cyan
-        {255, 255, 255} // White
-    };
-
-    int color_count = sizeof(lcd_colors) / sizeof(lcd_colors[0]);
-
-    while (1) {
-        ESP_LOGI(TAG, "Hello World! Counter: %d", counter);
-        ESP_LOGI(TAG, "Free heap: %ld bytes", esp_get_free_heap_size());
-
-        // Visual feedback on LCD screen and RGB LED
-        if (lcd_ready || rgb_led_ready) {
-            int color_index = counter % color_count;
-            uint16_t current_lcd_color = lcd_colors[color_index];
-
-            // Set RGB LED color
-            if (rgb_led_ready) {
-                rgb_led_set_color(rgb_colors[color_index].r,
-                                 rgb_colors[color_index].g,
-                                 rgb_colors[color_index].b);
-                ESP_LOGI(TAG, "RGB LED: Set to color %d (R=%d, G=%d, B=%d)",
-                        color_index, rgb_colors[color_index].r,
-                        rgb_colors[color_index].g, rgb_colors[color_index].b);
-            }
-
-            // Update LCD display
-            if (lcd_ready) {
-                // Fill safe area with color (avoiding curved bezel)
-                lcd_fill_screen(LCD_COLOR_BLACK);
-                lcd_fill_safe_area(current_lcd_color);
-
-                // Draw text on colored background with different sizes
-                // Alternate between different font sizes based on counter
-                if (counter % 3 == 0) {
-                    // Small text with wrapping
-                    lcd_printf_safe(5, 5, LCD_COLOR_BLACK, current_lcd_color, 1,
-                                   "Count: %d\nSmall Font\nHeap: %ld\nRGB: %s",
-                                   counter, esp_get_free_heap_size(),
-                                   rgb_led_ready ? "ON" : "OFF");
-                } else if (counter % 3 == 1) {
-                    // Medium text (2x scale)
-                    lcd_printf_safe(5, 5, LCD_COLOR_BLACK, current_lcd_color, 2,
-                                   "Count: %d\nMedium\nRGB: %s", counter,
-                                   rgb_led_ready ? "ON" : "OFF");
-                } else {
-                    // Large text (3x scale)
-                    lcd_printf_safe(5, 5, LCD_COLOR_BLACK, current_lcd_color, 3,
-                                   "Count: %d\nBig!", counter);
-                }
-
-                ESP_LOGI(TAG, "LCD: Safe area updated with color 0x%04X", current_lcd_color);
-            }
-        }
-
-        counter++;
-
-        // Wait 5 seconds (slower updates = less noticeable tearing)
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
+    lv_tick_inc(2);
 }
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "ESP32-C6 Hello World with LCD Display starting...");
+    ESP_LOGI(TAG, "ESP32-C6 Template Starting...");
 
-    // Display basic system information
-    print_system_info();
+    // Initialize backlight
+    ledc_timer_config_t ledc_timer = {
+        .speed_mode = LEDC_LOW_SPEED_MODE, .timer_num = LEDC_TIMER_0,
+        .duty_resolution = LEDC_TIMER_8_BIT, .freq_hz = 5000, .clk_cfg = LEDC_AUTO_CLK
+    };
+    ledc_timer_config(&ledc_timer);
+    ledc_channel_config_t ledc_channel = {
+        .speed_mode = LEDC_LOW_SPEED_MODE, .channel = LEDC_CHANNEL_0, .timer_sel = LEDC_TIMER_0,
+        .intr_type = LEDC_INTR_DISABLE, .gpio_num = PIN_BK_LIGHT, .duty = 200, .hpoint = 0
+    };
+    ledc_channel_config(&ledc_channel);
 
-    ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "Initializing hardware...");
+    // Initialize SPI bus
+    spi_bus_config_t buscfg = {
+        .sclk_io_num = PIN_SCLK, .mosi_io_num = PIN_MOSI, .miso_io_num = -1,
+        .quadwp_io_num = -1, .quadhd_io_num = -1, .max_transfer_sz = LCD_H_RES * 80 * sizeof(uint16_t),
+    };
+    spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_CH_AUTO);
 
-    // Initialize LCD display
-    init_lcd();
-
-    // Initialize RGB LED
-    init_rgb_led();
-
-    ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "Hardware initialized! Features available:");
-    ESP_LOGI(TAG, "✅ LCD Display: %s", lcd_ready ? "Ready" : "Failed");
-    ESP_LOGI(TAG, "✅ RGB LED: %s", rgb_led_ready ? "Ready" : "Failed");
-    ESP_LOGI(TAG, "- WiFi/Bluetooth: Configure in sdkconfig.defaults");
-    ESP_LOGI(TAG, "- Advanced features: See examples/board_demo/");
-    ESP_LOGI(TAG, "");
-
-    // Create and start the hello task
-    xTaskCreate(hello_task, "hello_task", 4096, NULL, 5, NULL);
-
-    if (lcd_ready || rgb_led_ready) {
-        ESP_LOGI(TAG, "Visual feedback started!");
-        if (lcd_ready) {
-            ESP_LOGI(TAG, "- LCD screen will cycle through colors every 5 seconds");
+    // Initialize LCD panel
+    esp_lcd_panel_io_handle_t io_handle = NULL;
+    esp_lcd_panel_io_spi_config_t io_config = {
+        .dc_gpio_num = PIN_LCD_DC,
+        .cs_gpio_num = PIN_LCD_CS,
+        .pclk_hz = 80 * 1000 * 1000,
+        .lcd_cmd_bits = 8,
+        .lcd_param_bits = 8,
+        .spi_mode = 0,
+        .trans_queue_depth = 10,
+        .flags = {
+            .dc_low_on_data = 0,  // DC high for data
         }
-        if (rgb_led_ready) {
-            ESP_LOGI(TAG, "- RGB LED will sync with LCD colors");
-        }
-        ESP_LOGI(TAG, "Console logs will continue for debugging.");
-    } else {
-        ESP_LOGI(TAG, "Hardware initialization failed. Check console logs for debugging.");
+    };
+    esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)LCD_HOST, &io_config, &io_handle);
+
+    esp_lcd_panel_dev_config_t panel_config = {
+        .reset_gpio_num = PIN_LCD_RST,
+        .rgb_endian = LCD_RGB_ENDIAN_BGR,  // Back to BGR to match LVGL color swap
+        .bits_per_pixel = 16,
+    };
+    esp_lcd_new_panel_st7789(io_handle, &panel_config, &panel_handle);
+
+    esp_lcd_panel_reset(panel_handle);
+    esp_lcd_panel_init(panel_handle);
+    esp_lcd_panel_invert_color(panel_handle, true);
+
+    // Fix display orientation and offset for ESP32-C6-LCD-1.47
+    // Based on our working custom driver: 172x320 display needs column offset of 34
+    esp_lcd_panel_set_gap(panel_handle, 34, 0); // Column offset for 172 width display
+    // No axis swapping needed for this specific board configuration
+
+    esp_lcd_panel_disp_on_off(panel_handle, true);
+
+    ESP_LOGI(TAG, "Initializing LVGL...");
+
+    // Initialize LVGL
+    lv_init();
+
+    // Initialize display buffer with double buffering for smoother rendering
+    lv_disp_draw_buf_init(&disp_buf, buf1, buf2, LCD_H_RES * 40);
+
+    // Initialize display driver
+    lv_disp_drv_init(&disp_drv);
+    disp_drv.hor_res = LCD_H_RES;
+    disp_drv.ver_res = LCD_V_RES;
+    disp_drv.flush_cb = lvgl_flush_cb;
+    disp_drv.draw_buf = &disp_buf;
+    disp_drv.user_data = panel_handle;
+
+    // Register the display driver
+    lv_disp_drv_register(&disp_drv);
+
+    // Start LVGL tick timer
+    const esp_timer_create_args_t lvgl_tick_timer_args = {
+        .callback = &increase_lvgl_tick, .name = "lvgl_tick"
+    };
+    esp_timer_handle_t lvgl_tick_timer = NULL;
+    esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer);
+    esp_timer_start_periodic(lvgl_tick_timer, 2000);
+
+    ESP_LOGI(TAG, "Creating UI...");
+
+    // Set background
+    lv_obj_set_style_bg_color(lv_scr_act(), lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(lv_scr_act(), LV_OPA_COVER, LV_PART_MAIN);
+
+    // Update display
+    lv_timer_handler();
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+    // Create text label
+    lv_obj_t * label = lv_label_create(lv_scr_act());
+    lv_label_set_text(label, "ESP32-C6\nTemplate\nReady!");
+    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_center(label);
+
+    ESP_LOGI(TAG, "Template ready! Custom drivers in components/ for reference.");
+
+    // LVGL task loop
+    while (1) {
+        lv_timer_handler();
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }

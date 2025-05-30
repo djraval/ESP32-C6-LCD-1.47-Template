@@ -12,7 +12,10 @@
 #include "freertos/task.h"
 #include <stdlib.h>
 #include <string.h>
-#include "../../../main/board_pins.h"
+// Pin definitions for ESP32-C6-LCD-1.47
+#define RGB_LED_PIN         8
+#define RGB_LED_COUNT       1
+#define RGB_LED_RMT_CHANNEL 0
 
 static const char *TAG = "RGB_LED";
 
