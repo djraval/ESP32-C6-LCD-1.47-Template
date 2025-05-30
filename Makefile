@@ -4,18 +4,19 @@
 # ESP-IDF Configuration
 IDF_PATH ?= C:/Espressif/frameworks/esp-idf-v5.4.1
 PORT ?= COM13
+JOBS ?= 16
 
 # Platform detection
 ifeq ($(OS),Windows_NT)
     SHELL := powershell.exe
     .SHELLFLAGS := -NoProfile -Command
     IDF_EXPORT := $(IDF_PATH)/export.ps1
-    ACTIVATE_CMD := & '$(IDF_EXPORT)';
+    ACTIVATE_CMD := $$env:CMAKE_BUILD_PARALLEL_LEVEL = $(JOBS); & '$(IDF_EXPORT)';
 else
     # Linux/macOS paths (common locations)
     IDF_PATH := $(or $(wildcard $(HOME)/esp/esp-idf), $(wildcard /opt/esp-idf), $(wildcard $(HOME)/.espressif/esp-idf))
     IDF_EXPORT := $(IDF_PATH)/export.sh
-    ACTIVATE_CMD := source $(IDF_EXPORT) &&
+    ACTIVATE_CMD := export CMAKE_BUILD_PARALLEL_LEVEL=$(JOBS) && source $(IDF_EXPORT) &&
     PORT := /dev/ttyUSB0
 endif
 
@@ -44,7 +45,6 @@ help:
 	@echo "  make setup      - First-time setup instructions"
 	@echo ""
 	@echo "Current port: $(PORT)"
-	@echo "Change port: make flash PORT=/dev/ttyUSB0"
 
 # Check if ESP-IDF is available
 check-idf:

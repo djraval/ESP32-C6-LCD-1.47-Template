@@ -10,6 +10,14 @@
 # Target Configuration
 CONFIG_IDF_TARGET="esp32c6"
 CONFIG_LV_COLOR_16_SWAP=y
+
+# Flash Configuration (4MB flash on Waveshare ESP32-C6-LCD-1.47)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# LVGL Optimizations (disable examples for faster compilation)
+CONFIG_LV_BUILD_EXAMPLES=n
+
+
 # Application settings
 CONFIG_APP_COMPILE_TIME_DATE=y
 
