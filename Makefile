@@ -45,30 +45,30 @@ all: build flash
 # Build the project
 build:
 	@echo "Building ESP32-C6 project..."
-	$(ACTIVATE_CMD) idf.py build
+	bash -c "$(ACTIVATE_CMD) idf.py build"
 
 # Flash to device
 flash:
 	@echo "Flashing to ESP32-C6 on $(PORT)..."
-	$(ACTIVATE_CMD) idf.py -p $(PORT) flash
+	bash -c "$(ACTIVATE_CMD) idf.py -p $(PORT) flash"
 
 # Monitor serial output
 monitor:
 	@echo "Starting serial monitor on $(PORT)..."
 	@echo "Press Ctrl+] to exit"
-	$(ACTIVATE_CMD) idf.py -p $(PORT) monitor
+	bash -c "$(ACTIVATE_CMD) idf.py -p $(PORT) monitor"
 
 # Clean build files
 clean:
 	@echo "Cleaning build files..."
-	$(ACTIVATE_CMD) idf.py fullclean
+	bash -c "$(ACTIVATE_CMD) idf.py fullclean"
 
 # Open menuconfig
 menuconfig:
 	@echo "Opening ESP-IDF configuration..."
-	$(ACTIVATE_CMD) idf.py menuconfig
+	bash -c "$(ACTIVATE_CMD) idf.py menuconfig"
 
 # Install/update dependencies
 deps:
 	@echo "Installing/updating dependencies..."
-	$(ACTIVATE_CMD) idf.py reconfigure
+	bash -c "$(ACTIVATE_CMD) idf.py reconfigure"

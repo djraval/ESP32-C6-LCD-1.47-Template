@@ -24,16 +24,19 @@ CONFIG_LOG_DEFAULT_LEVEL=3
 
 # Driver optimizations for better performance
 CONFIG_SPI_MASTER_ISR_IN_IRAM=y
-CONFIG_LEDC_ISR_IRAM_SAFE=y
 CONFIG_RMT_ISR_IRAM_SAFE=y
 
 # Disable unused components to save memory/flash
 CONFIG_BT_ENABLED=n
-CONFIG_WIFI_ENABLED=n
+
+# WiFi Configuration - Configure in main.c
+
+# NTP Configuration
+CONFIG_LWIP_SNTP_MAX_SERVERS=3
+CONFIG_LWIP_DHCP_GET_NTP_SRV=y
 
 # LVGL additional optimizations
 CONFIG_LV_MEM_CUSTOM=y
-CONFIG_LV_TICK_CUSTOM=y
 
 # FreeRTOS optimization
 CONFIG_FREERTOS_HZ=1000
