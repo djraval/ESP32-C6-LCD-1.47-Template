@@ -1,42 +1,39 @@
-# Waveshare ESP32-C6-LCD-1.47 Board Configuration
+# ESP32-C6-LCD-1.47 Minimal Template Configuration
 #
-# This file contains essential project settings for the
-# Waveshare ESP32-C6-LCD-1.47 development board.
-# The full sdkconfig is auto-generated from this file.
-#
-# For beginners: You can ignore this file initially.
-# For advanced users: See README.md for board-specific details.
+# Essential settings for the Waveshare ESP32-C6-LCD-1.47 development board
 
 # Target Configuration
 CONFIG_IDF_TARGET="esp32c6"
 CONFIG_LV_COLOR_16_SWAP=y
 
-# Flash Configuration (4MB flash on Waveshare ESP32-C6-LCD-1.47)
+# Flash Configuration (4MB flash)
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
-# LVGL Optimizations (disable examples for faster compilation)
+# LVGL Optimizations
 CONFIG_LV_BUILD_EXAMPLES=n
 
-
-# Application settings
-CONFIG_APP_COMPILE_TIME_DATE=y
-
-# Bootloader settings
-CONFIG_BOOTLOADER_LOG_LEVEL_INFO=y
-CONFIG_BOOTLOADER_LOG_LEVEL=3
-
-# Compiler settings
+# Compiler Optimization
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 
-# Memory Configuration (optimized for 4MB flash)
+# Memory Configuration
 CONFIG_PARTITION_TABLE_SINGLE_APP=y
 
-# Log Configuration
+# Log Level
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_DEFAULT_LEVEL=3
 
-# Additional configurations can be added as needed:
-# - SPI settings (for LCD and TF card)
-# - WiFi settings (when needed)
-# - Bluetooth settings (when needed)
-# - LVGL settings (for advanced graphics)
+# Driver optimizations for better performance
+CONFIG_SPI_MASTER_ISR_IN_IRAM=y
+CONFIG_LEDC_ISR_IRAM_SAFE=y
+CONFIG_RMT_ISR_IRAM_SAFE=y
+
+# Disable unused components to save memory/flash
+CONFIG_BT_ENABLED=n
+CONFIG_WIFI_ENABLED=n
+
+# LVGL additional optimizations
+CONFIG_LV_MEM_CUSTOM=y
+CONFIG_LV_TICK_CUSTOM=y
+
+# FreeRTOS optimization
+CONFIG_FREERTOS_HZ=1000
