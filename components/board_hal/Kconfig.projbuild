@@ -1,0 +1,12 @@
+menu "Display"
+
+    config BOARD_BACKLIGHT_PERCENT
+        int "Default LCD backlight brightness (%)"
+        range 0 100
+        default 10
+        help
+            Backlight brightness applied at boot, as a percentage (0 = off,
+            100 = full). Change at runtime by calling
+            display_hal_set_brightness().
+
+endmenu

@@ -20,7 +20,7 @@ static esp_lcd_panel_handle_t panel_handle = NULL;
 static esp_err_t init_backlight(void)
 {
     ESP_LOGI(TAG, "Initializing backlight");
-    
+
     esp_err_t ret = ledc_timer_config(&(ledc_timer_config_t){
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .timer_num = LEDC_TIMER_0,
@@ -32,21 +32,25 @@ static esp_err_t init_backlight(void)
         ESP_LOGE(TAG, "Failed to configure LEDC timer: %s", esp_err_to_name(ret));
         return ret;
     }
-    
+
+    // Map BACKLIGHT_DEFAULT_PERCENT (0-100) to 8-bit duty (0-255).
+    uint8_t default_duty = (BACKLIGHT_DEFAULT_PERCENT * 255) / 100;
+
     ret = ledc_channel_config(&(ledc_channel_config_t){
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .channel = LEDC_CHANNEL_0,
         .timer_sel = LEDC_TIMER_0,
         .intr_type = LEDC_INTR_DISABLE,
         .gpio_num = PIN_BK_LIGHT,
-        .duty = 200,
+        .duty = default_duty,
         .hpoint = 0
     });
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to configure LEDC channel: %s", esp_err_to_name(ret));
         return ret;
     }
-    
+
+    ESP_LOGI(TAG, "Backlight at %d%% (duty %u/255)", BACKLIGHT_DEFAULT_PERCENT, default_duty);
     return ESP_OK;
 }
 
@@ -137,12 +141,18 @@ esp_err_t display_hal_set_backlight(uint8_t brightness)
         ESP_LOGE(TAG, "Failed to set backlight duty: %s", esp_err_to_name(ret));
         return ret;
     }
-    
+
     ret = ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to update backlight duty: %s", esp_err_to_name(ret));
         return ret;
     }
-    
+
     return ESP_OK;
+}
+
+esp_err_t display_hal_set_brightness(uint8_t percent)
+{
+    if (percent > 100) percent = 100;
+    return display_hal_set_backlight((percent * 255) / 100);
 }

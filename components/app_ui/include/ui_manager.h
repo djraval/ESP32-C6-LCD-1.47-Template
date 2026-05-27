@@ -15,6 +15,11 @@
 extern "C" {
 #endif
 
+typedef struct {
+    char title[32];
+    char body[160];
+} ui_notification_t;
+
 /**
  * @brief Initialize UI manager and create main screen
  * @return ESP_OK on success, error code otherwise
@@ -26,9 +31,18 @@ esp_err_t ui_manager_init(void);
  */
 void ui_manager_run(void);
 
-// Add your new screen functions here:
-// esp_err_t ui_manager_create_settings_screen(void);
-// void ui_manager_show_settings(void);
+/**
+ * @brief Post a notification to be rendered by the UI task.
+ *
+ * Thread-safe: may be called from any task (e.g. the MQTT client task).
+ * Drops the notification (returns ESP_ERR_NO_MEM) if the internal queue is full
+ * rather than blocking.
+ *
+ * @param n Notification payload (copied into the queue).
+ * @return ESP_OK on enqueue, ESP_ERR_INVALID_STATE if ui_manager_init() not run,
+ *         ESP_ERR_NO_MEM if queue is full, ESP_ERR_INVALID_ARG if n is NULL.
+ */
+esp_err_t ui_manager_post_notification(const ui_notification_t *n);
 
 #ifdef __cplusplus
 }

@@ -1,0 +1,51 @@
+menu "MQTT Notification"
+
+    config NOTIFY_WIFI_SSID
+        string "WiFi SSID (slot 1)"
+        default ""
+        help
+            Primary SSID. Empty disables this slot. net_hal scans for known
+            SSIDs and connects to the strongest one in range, remembering the
+            choice for next boot.
+
+    config NOTIFY_WIFI_PASSWORD
+        string "WiFi password (slot 1)"
+        default ""
+        help
+            WPA2 password for slot 1. Leave empty for open networks.
+
+    config NOTIFY_WIFI_SSID_2
+        string "WiFi SSID (slot 2, optional)"
+        default ""
+        help
+            Optional second SSID (e.g. phone hotspot). Empty = unused.
+
+    config NOTIFY_WIFI_PASSWORD_2
+        string "WiFi password (slot 2)"
+        default ""
+
+    config NOTIFY_WIFI_SSID_3
+        string "WiFi SSID (slot 3, optional)"
+        default ""
+        help
+            Optional third SSID. Empty = unused.
+
+    config NOTIFY_WIFI_PASSWORD_3
+        string "WiFi password (slot 3)"
+        default ""
+
+    config NOTIFY_MQTT_BROKER_URI
+        string "MQTT broker URI"
+        default "mqtt://broker.emqx.io"
+        help
+            Full broker URI including scheme and port, e.g.
+            mqtt://broker.example.com:1883 or mqtts://... for TLS.
+
+    config NOTIFY_MQTT_TOPIC
+        string "MQTT topic to subscribe to"
+        default "devarshi/esp32c6/notify"
+        help
+            Topic the board subscribes to. Each message payload becomes the
+            notification body on the LCD.
+
+endmenu

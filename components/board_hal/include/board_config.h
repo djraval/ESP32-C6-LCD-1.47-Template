@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "sdkconfig.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,6 +26,11 @@ extern "C" {
 
 // Backlight Control
 #define PIN_BK_LIGHT    22
+
+// Default backlight brightness (0-100%). Applied during display_hal_init.
+// Edit via `make menuconfig` → "Display" → "Default LCD backlight brightness".
+// Change at runtime with display_hal_set_brightness(percent).
+#define BACKLIGHT_DEFAULT_PERCENT   CONFIG_BOARD_BACKLIGHT_PERCENT
 
 // RGB LED
 #define RGB_LED_PIN     8

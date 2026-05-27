@@ -1,3 +1,8 @@
+# Dot-prefixed tooling and config (agents, IDE, OS, etc.)
+.*
+!.gitignore
+!.gitattributes
+
 # ESP-IDF Build System
 build/
 sdkconfig
@@ -8,21 +13,10 @@ sdkconfig.old
 dependencies.lock
 managed_components/
 
-# VS Code
-.vscode/
-
-# IDE files
-.idea/
+# Editor/OS clutter (non-dot variants)
 *.swp
 *.swo
 *~
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
 ehthumbs.db
 Thumbs.db
 

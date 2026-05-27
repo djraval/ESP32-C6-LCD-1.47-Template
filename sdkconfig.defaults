@@ -15,8 +15,9 @@ CONFIG_LV_BUILD_EXAMPLES=n
 # Compiler Optimization
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 
-# Memory Configuration
-CONFIG_PARTITION_TABLE_SINGLE_APP=y
+# Memory Configuration — custom partition table gives the app 2 MB so WiFi + MQTT fit
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # Log Level
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
@@ -27,13 +28,11 @@ CONFIG_SPI_MASTER_ISR_IN_IRAM=y
 CONFIG_LEDC_ISR_IRAM_SAFE=y
 CONFIG_RMT_ISR_IRAM_SAFE=y
 
-# Disable unused components to save memory/flash
+# Disable Bluetooth to save flash. WiFi is enabled (used by net_hal).
 CONFIG_BT_ENABLED=n
-CONFIG_WIFI_ENABLED=n
 
 # LVGL additional optimizations
 CONFIG_LV_MEM_CUSTOM=y
-CONFIG_LV_TICK_CUSTOM=y
 
 # FreeRTOS optimization
 CONFIG_FREERTOS_HZ=1000
