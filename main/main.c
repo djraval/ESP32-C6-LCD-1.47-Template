@@ -1,52 +1,60 @@
 /*
- * ESP32-C6-LCD-1.47 — MQTT Notification Display
+ * ESP32-C6-LCD-1.47 — Example app on top of the framework.
  *
- * Three framework components keep this file thin:
- *   board_hal — display, backlight, RGB LED (incl. led_hal_flash)
- *   app_ui    — LVGL screen + thread-safe notification queue
- *   net_hal   — WiFi STA (multi-cred scan/remember) + esp-mqtt client
+ * Everything board-specific lives in components/. This file is pure app
+ * glue: register the callbacks you care about, then app_run() takes over.
  *
- * The only app-specific logic lives in on_mqtt_message() below: turn an
- * incoming MQTT payload into a UI notification and flash the LED. Forks that
- * want a different app behavior should mostly edit this file.
+ * The example below mirrors the previous MQTT notification behavior:
+ *   - any MQTT message on the chosen topic → render as a notification +
+ *     flash the LED green
+ *   - online/offline → update the status line
+ *
+ * Replace the body of on_mqtt() / on_net() with your own logic, or drop
+ * them entirely if you don't need MQTT or network awareness.
+ *
+ * To disable MQTT entirely, set CONFIG_APP_MQTT_ENABLED=n in menuconfig
+ * and remove the calls below — the framework is happy without it.
  */
 
-#include <stdio.h>
+#include "app.h"
 #include "esp_log.h"
-#include "display_hal.h"
-#include "led_hal.h"
-#include "ui_manager.h"
-#include "net_hal.h"
 
-static const char *TAG = "ESP32C6-NOTIFY";
+static const char *TAG = "app_main";
 
-static void on_mqtt_message(const net_hal_mqtt_msg_t *msg, void *arg)
+#define MQTT_BROKER_URI  "mqtt://broker.emqx.io"
+#define MQTT_TOPIC       "devarshi/esp32c6/notify"
+
+static void on_net(app_net_state_t state, void *ctx)
 {
-    (void)arg;
-    ui_notification_t n = { 0 };
-    snprintf(n.title, sizeof(n.title), "%.*s", msg->topic_len, msg->topic);
-    snprintf(n.body,  sizeof(n.body),  "%.*s", msg->data_len,  msg->data);
-    ui_manager_post_notification(&n);
-    led_hal_flash(0, 64, 0, 500);
+    (void)ctx;
+    app_display_show_status(state == APP_NET_UP ? "Online" : "Offline");
 }
+
+#ifdef CONFIG_APP_MQTT_ENABLED
+static void on_mqtt(const app_mqtt_msg_t *msg, void *ctx)
+{
+    (void)ctx;
+    char title[32] = { 0 };
+    char body[160] = { 0 };
+    snprintf(title, sizeof(title), "%.*s", msg->topic_len, msg->topic);
+    snprintf(body,  sizeof(body),  "%.*s", msg->data_len,  msg->data);
+    app_display_notify(title, body);
+    app_led_flash(0, 64, 0, 500);
+}
+#endif
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "ESP32-C6 MQTT notification display starting...");
+    ESP_LOGI(TAG, "Starting");
 
-    ESP_ERROR_CHECK(display_hal_init());
-    ESP_ERROR_CHECK(led_hal_init());
-    ESP_ERROR_CHECK(ui_manager_init());
+    ESP_ERROR_CHECK(app_init());
 
-    // Network is best-effort: if WiFi fails to associate we still want the UI
-    // up so the user can see the failure and power-cycle.
-    esp_err_t net_err = net_hal_init(&(net_hal_config_t){
-        .on_mqtt_data = on_mqtt_message,
-    });
-    if (net_err != ESP_OK) {
-        ESP_LOGE(TAG, "Network init failed: %s — continuing without MQTT",
-                 esp_err_to_name(net_err));
-    }
+    app_on_net_state(on_net, NULL);
 
-    ui_manager_run();
+#ifdef CONFIG_APP_MQTT_ENABLED
+    app_mqtt_subscribe(MQTT_TOPIC, on_mqtt, NULL);
+    app_mqtt_init(MQTT_BROKER_URI);
+#endif
+
+    app_run();   /* never returns */
 }

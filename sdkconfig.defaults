@@ -15,7 +15,7 @@ CONFIG_LV_BUILD_EXAMPLES=n
 # Compiler Optimization
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 
-# Memory Configuration — custom partition table gives the app 2 MB so WiFi + MQTT fit
+# Memory Configuration — custom partition table gives the app 2 MB so WiFi + BLE fit
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
@@ -28,8 +28,21 @@ CONFIG_SPI_MASTER_ISR_IN_IRAM=y
 CONFIG_LEDC_ISR_IRAM_SAFE=y
 CONFIG_RMT_ISR_IRAM_SAFE=y
 
-# Disable Bluetooth to save flash. WiFi is enabled (used by net_hal).
-CONFIG_BT_ENABLED=n
+# --- Bluetooth (NimBLE) for WiFi provisioning over BLE -------------------
+CONFIG_BT_ENABLED=y
+CONFIG_BT_CONTROLLER_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
+CONFIG_BT_NIMBLE_SECURITY_ENABLE=y
+CONFIG_BT_NIMBLE_SM_LEGACY=y
+CONFIG_BT_NIMBLE_SM_SC=y
+CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_INTERNAL=y
+
+# --- WiFi provisioning service -------------------------------------------
+CONFIG_ESP_PROTOCOMM_SUPPORT_SECURITY_VERSION_1=y
+CONFIG_WIFI_PROV_BLE_SEC_CONN=y
 
 # LVGL additional optimizations
 CONFIG_LV_MEM_CUSTOM=y

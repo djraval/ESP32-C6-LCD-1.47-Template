@@ -1,0 +1,25 @@
+menu "App Button"
+
+    config APP_BUTTON_ENABLED
+        bool "Enable app_button service"
+        default y
+        help
+            Generic GPIO button handler with software debounce and
+            press / release / long-press event modes.
+
+    config APP_BUTTON_BOOT_GPIO
+        int "BOOT button GPIO"
+        depends on APP_BUTTON_ENABLED
+        default 9
+        range 0 30
+        help
+            ESP32-C6 BOOT button is wired to GPIO9. Override if your board
+            uses a different pin.
+
+    config APP_BUTTON_DEBOUNCE_MS
+        int "Debounce window (ms)"
+        depends on APP_BUTTON_ENABLED
+        default 20
+        range 5 100
+
+endmenu

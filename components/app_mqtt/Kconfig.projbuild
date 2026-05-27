@@ -1,0 +1,21 @@
+menu "App MQTT service"
+
+    config APP_MQTT_ENABLED
+        bool "Enable app_mqtt service"
+        default y
+        help
+            Compile the optional MQTT client service. App code calls
+            app_mqtt_init() with the broker URI, then app_mqtt_subscribe() /
+            app_mqtt_publish(). When disabled, the calls compile out and the
+            mqtt library is not linked.
+
+    config APP_MQTT_MAX_SUBSCRIPTIONS
+        int "Max simultaneous subscriptions"
+        default 8
+        range 1 32
+        depends on APP_MQTT_ENABLED
+        help
+            Upper bound on app_mqtt_subscribe() calls. Storage is static —
+            choose generously, each slot is small.
+
+endmenu

@@ -35,6 +35,10 @@ extern "C" {
 // RGB LED
 #define RGB_LED_PIN     8
 
+// BOOT button (GPIO9). Active-low, internal pull-up. Used by app_framework
+// as a long-press handler for re-provisioning.
+#define PIN_BOOT_BUTTON 9
+
 #ifdef __cplusplus
 }
 #endif

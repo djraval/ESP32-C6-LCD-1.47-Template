@@ -1,358 +1,225 @@
 /*
- * Network HAL implementation — WiFi station + esp-mqtt client.
+ * Network HAL — WiFi + BLE provisioning.
  *
- * Connection flow:
- *   1. NVS init (also used by the WiFi driver).
- *   2. Build credential list from runtime override or Kconfig slots.
- *   3. Fast path: try the SSID that worked last boot (recall from NVS).
- *   4. Fallback: active scan, sort by RSSI, try each in-range known cred.
- *   5. Save the SSID we ended up connecting to.
- *   6. Start MQTT, subscribe, dispatch incoming messages via callback.
+ * Implementation notes:
+ *
+ *   - All work happens on a dedicated "net_hal" task. net_hal_init() spawns
+ *     it and returns; state changes flow through the user callback.
+ *
+ *   - On boot we ask wifi_provisioning_manager whether credentials exist.
+ *     If not, we advertise over BLE (NimBLE), publish service name +
+ *     PoP via the event callback so the UI can display them, and wait for
+ *     credentials. wifi_provisioning_manager auto-starts WiFi STA and
+ *     connects when credentials arrive.
+ *
+ *   - Once connected (IP_EVENT_STA_GOT_IP), we transition to CONNECTED and
+ *     stop / deinit the provisioning manager to free its resources.
+ *
+ *   - WIFI_EVENT_STA_DISCONNECTED after a successful connect is treated as
+ *     a transient drop; the WiFi driver retries on its own and we stay in
+ *     CONNECTING until either GOT_IP fires again or the user resets.
  */
 
 #include "net_hal.h"
+
+#include <string.h>
+#include <stdio.h>
 
 #include "esp_log.h"
 #include "esp_event.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
+#include "esp_mac.h"
+#include "esp_system.h"
 #include "nvs_flash.h"
-#include "nvs.h"
-#include "mqtt_client.h"
+
+#include "wifi_provisioning/manager.h"
+#include "wifi_provisioning/scheme_ble.h"
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "freertos/event_groups.h"
 
-#include <stdlib.h>
-#include <string.h>
+static const char *TAG = "net_hal";
 
-static const char *TAG = "NET_HAL";
+/* Hardcoded for now — exposed through Kconfig in a polish pass. */
+#define PROV_NAME_PREFIX "PROV_"
+#define PROV_POP         "abcd1234"
 
-#define WIFI_CONNECTED_BIT       BIT0
-#define WIFI_FAIL_BIT            BIT1
-#define WIFI_CONNECT_TIMEOUT_MS  8000   /* per-credential attempt */
+#define EVT_GOT_IP       BIT0
+#define EVT_PROV_DONE    BIT1
+#define EVT_PROV_FAIL    BIT2
 
-#define NVS_NS                   "net_hal"
-#define NVS_KEY_LAST_SSID        "last_ssid"
+static EventGroupHandle_t s_events;
+static net_hal_event_cb_t s_user_cb;
+static void              *s_user_ctx;
+static net_hal_state_t    s_state = NET_HAL_BOOTING;
 
-#define MAX_KCONFIG_CREDS        3
-#define MAX_SSID_BUF             33     /* 32 chars + NUL */
+static char s_service_name[16];
 
-static EventGroupHandle_t s_wifi_event_group;
-static esp_mqtt_client_handle_t s_mqtt_client;
-
-static net_hal_mqtt_data_cb_t s_on_mqtt_data;
-static void *s_on_mqtt_data_arg;
-
-/* ---- WiFi event handling ------------------------------------------------ */
-
-static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
+static void emit(net_hal_state_t st, const char *svc, const char *pop)
 {
-    if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
-        xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
-    } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t *event = (ip_event_got_ip_t *)data;
-        ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
-        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-    }
+    s_state = st;
+    if (!s_user_cb) return;
+    net_hal_event_t ev = {
+        .state             = st,
+        .prov_service_name = svc,
+        .prov_pop          = pop,
+    };
+    s_user_cb(&ev, s_user_ctx);
 }
 
-/* ---- NVS helpers (remember the last successful SSID) -------------------- */
-
-static void remember_ssid(const char *ssid)
+static void build_service_name(char *out, size_t cap)
 {
-    nvs_handle_t h;
-    if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) {
-        return;
-    }
-    nvs_set_str(h, NVS_KEY_LAST_SSID, ssid);
-    nvs_commit(h);
-    nvs_close(h);
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(out, cap, "%s%02X%02X", PROV_NAME_PREFIX, mac[4], mac[5]);
 }
 
-static esp_err_t recall_ssid(char *out, size_t cap)
+/* ---- event handler --------------------------------------------------- */
+
+static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
-    nvs_handle_t h;
-    esp_err_t err = nvs_open(NVS_NS, NVS_READONLY, &h);
-    if (err != ESP_OK) {
-        return err;
-    }
-    size_t len = cap;
-    err = nvs_get_str(h, NVS_KEY_LAST_SSID, out, &len);
-    nvs_close(h);
-    return err;
-}
+    (void)arg;
 
-/* ---- Connection logic --------------------------------------------------- */
-
-static esp_err_t try_connect(const net_hal_wifi_cred_t *cred)
-{
-    wifi_config_t cfg = { 0 };
-    strncpy((char *)cfg.sta.ssid, cred->ssid, sizeof(cfg.sta.ssid) - 1);
-    if (cred->password && cred->password[0] != '\0') {
-        strncpy((char *)cfg.sta.password, cred->password, sizeof(cfg.sta.password) - 1);
-        cfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-    } else {
-        cfg.sta.threshold.authmode = WIFI_AUTH_OPEN;
-    }
-
-    esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &cfg);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_set_config: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    /* Clear stale bits from any previous attempt's trailing disconnect. */
-    xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
-
-    err = esp_wifi_connect();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_connect: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    EventBits_t bits = xEventGroupWaitBits(
-        s_wifi_event_group,
-        WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-        pdFALSE, pdFALSE,
-        pdMS_TO_TICKS(WIFI_CONNECT_TIMEOUT_MS));
-
-    if (bits & WIFI_CONNECTED_BIT) {
-        return ESP_OK;
-    }
-
-    if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGW(TAG, "Could not connect to '%s' (auth/assoc failed)", cred->ssid);
-    } else {
-        ESP_LOGW(TAG, "Could not connect to '%s' (no event in %d ms)",
-                 cred->ssid, WIFI_CONNECT_TIMEOUT_MS);
-    }
-    esp_wifi_disconnect();
-    return ESP_FAIL;
-}
-
-static int cmp_rssi_desc(const void *a, const void *b)
-{
-    const wifi_ap_record_t *ra = a;
-    const wifi_ap_record_t *rb = b;
-    /* Strongest first (RSSI is a negative dBm value). */
-    return rb->rssi - ra->rssi;
-}
-
-static esp_err_t connect_best_wifi(const net_hal_wifi_cred_t *creds, size_t count)
-{
-    if (count == 0) {
-        ESP_LOGE(TAG, "No WiFi credentials configured (set CONFIG_NOTIFY_WIFI_SSID or pass cfg->wifi_creds)");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    /* Always scan first — the WiFi driver associates more reliably with a
-     * fresh scan in hand, and the scan gives us RSSIs for ranking. */
-    ESP_LOGI(TAG, "Scanning for known networks...");
-    wifi_scan_config_t scan_cfg = { 0 };
-    esp_err_t err = esp_wifi_scan_start(&scan_cfg, true /* blocking */);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_wifi_scan_start: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    uint16_t ap_num = 0;
-    esp_wifi_scan_get_ap_num(&ap_num);
-    if (ap_num == 0) {
-        ESP_LOGW(TAG, "Scan returned 0 APs");
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    wifi_ap_record_t *records = calloc(ap_num, sizeof(*records));
-    if (!records) {
-        return ESP_ERR_NO_MEM;
-    }
-    err = esp_wifi_scan_get_ap_records(&ap_num, records);
-    if (err != ESP_OK) {
-        free(records);
-        return err;
-    }
-    qsort(records, ap_num, sizeof(*records), cmp_rssi_desc);
-
-    /* If we remember a previously-successful SSID and it's in range AND in
-     * the cred list, try it first — even if another known network has a
-     * stronger signal right now. */
-    char remembered[MAX_SSID_BUF] = "";
-    bool have_remembered = (recall_ssid(remembered, sizeof(remembered)) == ESP_OK
-                            && remembered[0] != '\0');
-
-    if (have_remembered) {
-        for (uint16_t i = 0; i < ap_num; i++) {
-            if (strcmp((const char *)records[i].ssid, remembered) != 0) continue;
-            for (size_t c = 0; c < count; c++) {
-                if (creds[c].ssid && strcmp(remembered, creds[c].ssid) == 0) {
-                    ESP_LOGI(TAG, "Trying remembered SSID '%s' (RSSI=%d)",
-                             remembered, records[i].rssi);
-                    if (try_connect(&creds[c]) == ESP_OK) {
-                        free(records);
-                        return ESP_OK;
-                    }
-                    ESP_LOGW(TAG, "Remembered SSID didn't connect; trying others");
-                    break;
-                }
-            }
+    if (base == WIFI_PROV_EVENT) {
+        switch (id) {
+        case WIFI_PROV_START:
+            ESP_LOGI(TAG, "BLE provisioning started: %s (PoP=%s)",
+                     s_service_name, PROV_POP);
+            emit(NET_HAL_PROVISIONING, s_service_name, PROV_POP);
+            break;
+        case WIFI_PROV_CRED_RECV:
+            ESP_LOGI(TAG, "creds received");
+            emit(NET_HAL_CONNECTING, NULL, NULL);
+            break;
+        case WIFI_PROV_CRED_FAIL:
+            ESP_LOGW(TAG, "cred verification failed");
+            xEventGroupSetBits(s_events, EVT_PROV_FAIL);
+            emit(NET_HAL_FAILED, NULL, NULL);
+            break;
+        case WIFI_PROV_CRED_SUCCESS:
+            ESP_LOGI(TAG, "cred verified, associating...");
+            break;
+        case WIFI_PROV_END:
+            ESP_LOGI(TAG, "provisioning service stopping");
+            xEventGroupSetBits(s_events, EVT_PROV_DONE);
+            wifi_prov_mgr_deinit();
+            break;
+        default:
             break;
         }
-    }
-
-    /* Try each remaining in-range known SSID by descending RSSI. */
-    for (uint16_t i = 0; i < ap_num; i++) {
-        const char *seen = (const char *)records[i].ssid;
-        if (have_remembered && strcmp(seen, remembered) == 0) {
-            continue; /* already tried above */
-        }
-        for (size_t c = 0; c < count; c++) {
-            if (creds[c].ssid && strcmp(seen, creds[c].ssid) == 0) {
-                ESP_LOGI(TAG, "Trying '%s' (RSSI=%d)", seen, records[i].rssi);
-                if (try_connect(&creds[c]) == ESP_OK) {
-                    remember_ssid(creds[c].ssid);
-                    free(records);
-                    return ESP_OK;
-                }
-                break; /* each SSID only appears once in cred list */
+    } else if (base == WIFI_EVENT) {
+        if (id == WIFI_EVENT_STA_DISCONNECTED) {
+            if (s_state == NET_HAL_CONNECTED) {
+                ESP_LOGW(TAG, "STA disconnected; driver will retry");
+                emit(NET_HAL_DISCONNECTED, NULL, NULL);
             }
+            esp_wifi_connect();
+        } else if (id == WIFI_EVENT_STA_START) {
+            esp_wifi_connect();
         }
+    } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t *event = data;
+        ESP_LOGI(TAG, "got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        xEventGroupSetBits(s_events, EVT_GOT_IP);
+        emit(NET_HAL_CONNECTED, NULL, NULL);
     }
-
-    free(records);
-    ESP_LOGE(TAG, "No known network in range (scanned %u APs)", ap_num);
-    return ESP_ERR_NOT_FOUND;
 }
 
-static esp_err_t wifi_bringup(const net_hal_wifi_cred_t *creds, size_t count)
+/* ---- net task -------------------------------------------------------- */
+
+static void net_task(void *arg)
 {
-    s_wifi_event_group = xEventGroupCreate();
-    if (!s_wifi_event_group) {
-        return ESP_ERR_NO_MEM;
+    (void)arg;
+
+    /* NVS — provisioning_manager and WiFi need it. */
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        err = nvs_flash_init();
     }
+    ESP_ERROR_CHECK(err);
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
 
-    wifi_init_config_t init_cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&init_cfg));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_PROV_EVENT, ESP_EVENT_ANY_ID,
+                                               &on_event, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                               &on_event, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                               &on_event, NULL));
 
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(
-        WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(
-        IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
+    wifi_init_config_t wifi_cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&wifi_cfg));
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_start());
-
-    return connect_best_wifi(creds, count);
-}
-
-/* ---- MQTT --------------------------------------------------------------- */
-
-static void mqtt_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
-{
-    esp_mqtt_event_handle_t event = data;
-    switch ((esp_mqtt_event_id_t)id) {
-        case MQTT_EVENT_CONNECTED:
-            ESP_LOGI(TAG, "MQTT connected; subscribing to %s", CONFIG_NOTIFY_MQTT_TOPIC);
-            esp_mqtt_client_subscribe(event->client, CONFIG_NOTIFY_MQTT_TOPIC, 0);
-            break;
-        case MQTT_EVENT_DISCONNECTED:
-            ESP_LOGW(TAG, "MQTT disconnected");
-            break;
-        case MQTT_EVENT_DATA:
-            ESP_LOGI(TAG, "MQTT msg on %.*s (%d bytes)",
-                     event->topic_len, event->topic, event->data_len);
-            if (s_on_mqtt_data) {
-                net_hal_mqtt_msg_t msg = {
-                    .topic     = event->topic,
-                    .topic_len = event->topic_len,
-                    .data      = event->data,
-                    .data_len  = event->data_len,
-                };
-                s_on_mqtt_data(&msg, s_on_mqtt_data_arg);
-            }
-            break;
-        case MQTT_EVENT_ERROR:
-            ESP_LOGE(TAG, "MQTT error");
-            break;
-        default:
-            break;
-    }
-}
-
-static esp_err_t mqtt_start(void)
-{
-    esp_mqtt_client_config_t mqtt_cfg = {
-        .broker.address.uri = CONFIG_NOTIFY_MQTT_BROKER_URI,
+    /* Bring up the provisioning manager so we can ask whether creds exist.
+     * If they don't we keep it running for the actual BLE flow; if they do
+     * we deinit immediately and start WiFi STA ourselves. */
+    wifi_prov_mgr_config_t prov_cfg = {
+        .scheme               = wifi_prov_scheme_ble,
+        .scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM,
     };
-    s_mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
-    if (!s_mqtt_client) {
-        return ESP_FAIL;
+    ESP_ERROR_CHECK(wifi_prov_mgr_init(prov_cfg));
+
+    bool provisioned = false;
+    ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&provisioned));
+
+    if (!provisioned) {
+        build_service_name(s_service_name, sizeof(s_service_name));
+        ESP_LOGI(TAG, "no creds; starting BLE provisioning as %s", s_service_name);
+        emit(NET_HAL_PROVISIONING, s_service_name, PROV_POP);
+
+        const char *pop = PROV_POP;
+        ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(
+            WIFI_PROV_SECURITY_1, (const void *)pop,
+            s_service_name, NULL));
+
+        /* Block here until provisioning ends — manager auto-starts WiFi
+         * and connects once it has good creds, so GOT_IP eventually fires. */
+        wifi_prov_mgr_wait();
+        /* manager has self-deinit'd in WIFI_PROV_END handler. */
+    } else {
+        ESP_LOGI(TAG, "stored creds present; skipping provisioning");
+        wifi_prov_mgr_deinit();
+        emit(NET_HAL_CONNECTING, NULL, NULL);
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        ESP_ERROR_CHECK(esp_wifi_start());
     }
-    ESP_ERROR_CHECK(esp_mqtt_client_register_event(
-        s_mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL));
-    return esp_mqtt_client_start(s_mqtt_client);
+
+    /* Task is done — the event handler keeps everything live. */
+    vTaskDelete(NULL);
 }
 
-/* ---- Kconfig slot harvesting ------------------------------------------- */
-
-static size_t build_kconfig_creds(net_hal_wifi_cred_t *out, size_t cap)
-{
-    static const struct {
-        const char *ssid;
-        const char *password;
-    } slots[] = {
-        { CONFIG_NOTIFY_WIFI_SSID,   CONFIG_NOTIFY_WIFI_PASSWORD   },
-        { CONFIG_NOTIFY_WIFI_SSID_2, CONFIG_NOTIFY_WIFI_PASSWORD_2 },
-        { CONFIG_NOTIFY_WIFI_SSID_3, CONFIG_NOTIFY_WIFI_PASSWORD_3 },
-    };
-    size_t n = 0;
-    for (size_t i = 0; i < sizeof(slots) / sizeof(slots[0]) && n < cap; i++) {
-        if (slots[i].ssid && slots[i].ssid[0] != '\0') {
-            out[n].ssid     = slots[i].ssid;
-            out[n].password = slots[i].password;
-            n++;
-        }
-    }
-    return n;
-}
-
-/* ---- Public entry point ------------------------------------------------- */
+/* ---- public API ------------------------------------------------------ */
 
 esp_err_t net_hal_init(const net_hal_config_t *cfg)
 {
-    ESP_LOGI(TAG, "Initializing network");
-
     if (cfg) {
-        s_on_mqtt_data     = cfg->on_mqtt_data;
-        s_on_mqtt_data_arg = cfg->user_arg;
+        s_user_cb  = cfg->event_cb;
+        s_user_ctx = cfg->event_ctx;
     }
+    s_events = xEventGroupCreate();
+    if (!s_events) return ESP_ERR_NO_MEM;
 
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+    BaseType_t ok = xTaskCreate(net_task, "net_hal", 6144, NULL, 5, NULL);
+    return ok == pdPASS ? ESP_OK : ESP_FAIL;
+}
 
-    net_hal_wifi_cred_t kconfig_creds[MAX_KCONFIG_CREDS];
-    const net_hal_wifi_cred_t *creds;
-    size_t count;
-    if (cfg && cfg->wifi_creds && cfg->wifi_cred_count > 0) {
-        creds = cfg->wifi_creds;
-        count = cfg->wifi_cred_count;
-    } else {
-        count = build_kconfig_creds(kconfig_creds, MAX_KCONFIG_CREDS);
-        creds = kconfig_creds;
-    }
+void net_hal_reset_credentials(void)
+{
+    ESP_LOGW(TAG, "resetting WiFi credentials and rebooting");
+    /* Safe to call without manager init — uses esp_wifi_restore() under the
+     * hood, which clears the wifi nvs namespace. */
+    wifi_prov_mgr_reset_provisioning();
+    /* Give logs a chance to flush, then restart. */
+    vTaskDelay(pdMS_TO_TICKS(300));
+    esp_restart();
+}
 
-    ret = wifi_bringup(creds, count);
-    if (ret != ESP_OK) {
-        return ret;
-    }
-
-    return mqtt_start();
+bool net_hal_is_connected(void)
+{
+    return s_state == NET_HAL_CONNECTED;
 }

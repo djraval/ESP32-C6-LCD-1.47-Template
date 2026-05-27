@@ -1,0 +1,22 @@
+menu "App Timer"
+
+    config APP_TIMER_ENABLED
+        bool "Enable app_timer service"
+        default y
+        help
+            Wraps esp_timer with a FreeRTOS work-queue so callbacks run in
+            task context, never timer ISR context.
+
+    config APP_TIMER_WORKER_STACK
+        int "Worker task stack size (bytes)"
+        depends on APP_TIMER_ENABLED
+        default 4096
+        range 2048 16384
+
+    config APP_TIMER_QUEUE_LEN
+        int "Pending callback queue length"
+        depends on APP_TIMER_ENABLED
+        default 16
+        range 4 64
+
+endmenu

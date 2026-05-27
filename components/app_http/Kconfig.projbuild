@@ -1,0 +1,25 @@
+menu "App HTTP"
+
+    config APP_HTTP_ENABLED
+        bool "Enable app_http client"
+        default y
+        help
+            Thin wrapper around esp_http_client. Each request runs on its own
+            short-lived task so callbacks don't block the caller.
+
+    config APP_HTTP_MAX_RESP_BYTES
+        int "Maximum response body size (bytes)"
+        depends on APP_HTTP_ENABLED
+        default 4096
+        range 256 65536
+        help
+            Responses larger than this are truncated. The buffer is malloc'd
+            for the duration of the request.
+
+    config APP_HTTP_TASK_STACK
+        int "Per-request task stack size (bytes)"
+        depends on APP_HTTP_ENABLED
+        default 6144
+        range 4096 16384
+
+endmenu

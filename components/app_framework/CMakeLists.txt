@@ -1,0 +1,21 @@
+idf_component_register(
+    SRCS
+        "src/app_init.c"
+        "src/app_display.c"
+        "src/app_led.c"
+        "src/app_net.c"
+        "src/app_kv.c"
+    INCLUDE_DIRS "include"
+    REQUIRES
+        board_hal
+        app_ui
+        net_hal
+        app_mqtt
+        app_timer
+        app_http
+        app_button
+        nvs_flash
+        esp_timer
+        esp_driver_gpio
+        lvgl
+)
